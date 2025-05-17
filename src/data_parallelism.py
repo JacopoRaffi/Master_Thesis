@@ -1,0 +1,114 @@
+import argparse
+import torch
+from torch.nn.parallel import DistributedDataParallel as DDP
+import time
+import csv
+from utils import *
+
+#TODO: Add peak memory usage during training
+def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
+                num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu'):
+    
+
+    model.to(device)
+
+    # csv file to save the stats
+    world_size = torch.distributed.get_world_size()
+    rank = torch.distributed.get_rank()
+    batch_size = train_loader.batch_size * world_size
+    file_name = f"rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}.csv"
+
+    with open(file_name, mode="w+") as file:
+        writer = csv.writer(file)
+        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "phase"])
+
+
+        model = DDP(model)
+
+        for epoch in range(num_epochs):
+            model.train()
+            for i, (images, labels) in enumerate(train_loader):
+                images = images.to(device)
+                labels = labels.to(device)
+
+                optimizer.zero_grad()
+                start_forward = time.time()
+                outputs = model(**images)
+                loss = train_loss(outputs, labels)
+                end_forward = time.time()
+
+                start_backward = time.time()
+                loss.backward()
+                end_backward = time.time()
+                optimizer.step()
+
+                # Log the stats
+                writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, "train"])
+                
+
+            # Validation step
+            model.eval()
+            with torch.no_grad():
+                for images, labels in val_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+                    start_forward = time.time()
+                    outputs = model(**images)
+                    loss = val_loss(outputs, labels)
+                    end_forward = time.time()
+
+                    # Log the stats
+                    writer.writerow([epoch, i, loss.item(), end_forward - start_forward, 0, "val"])
+                    
+
+
+
+
+def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
+                  num_epochs:int, asynch_iterations:int, optimizer:torch.optim, criterion:torch.nn, val_loss:callable):
+    pass
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Distributed Training Script")
+    parser.add_argument("--mode", type=str, choices=["synch", "asynch"], default="synch", 
+                        help="Training mode: 'synch' for synchronous or 'asynch' for asynchronous")
+    parser.add_argument("--model", type=str, required=True,
+                        help="Name of the ViT model to use")
+    parser.add_argument("--minibatch", type=int, default=4096, 
+                        help="Size of the minibatch for training")
+    parser.add_argument("--num_epochs", type=int, default=10,
+                        help="Number of epochs to train the model")
+    parser.add_argument("--lr", type=float, default=0.001,
+                        help="Learning rate for the optimizer")
+    parser.add_argument("--weight_decay", type=float, default=0.0001,
+                        help="Weight decay for the optimizer")
+    parser.add_argument("--asynch_iterations", type=int, default=10,
+                        help="Number of iteration to be performed before synchronizing")
+    args = parser.parse_args()
+    
+    rank, world_size, device = init_distributed()
+
+    mode = args.mode
+    model_name = args.model
+    minibatch = args.minibatch // world_size # Minibatch size per worker
+    num_epochs = args.num_epochs
+    lr = args.lr
+    weight_decay = args.weight_decay
+
+    train_set, val_set, test_set = load_ImageNet(model_name)
+
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_set, num_replicas=world_size, rank=rank)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, sampler=train_sampler)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=minibatch)
+
+    image_processor, model = load_model(model_name)
+    loss = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    if mode == "synch":
+        synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss)
+    else:
+        asynch_train()
+

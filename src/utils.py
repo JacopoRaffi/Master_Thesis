@@ -10,6 +10,7 @@ def load_ImageNet(root:str):
     train_dataset = torchvision.datasets.ImageNet(root=root, split='train', download=True)
     test_dataset = torchvision.datasets.ImageNet(root=root, split='val', download=True)
 
+    #TODO: return also the validation set
     return train_dataset, test_dataset
 
 def load_model(model_name:str):
@@ -30,7 +31,7 @@ def init_distributed():
     '''Initialize the distributed process group for distributed training'''
     rank = int(os.environ['RANK'])
     world_size = int(os.environ['WORLD_SIZE'])
-    device = torch.device('cpu')
+    device = torch.device(f'cuda:{rank % torch.cuda.device_count()}') if torch.cuda.is_available() else 'cpu'
     dist.init_process_group()
 
     return rank, world_size, device
