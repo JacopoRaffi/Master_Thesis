@@ -1,0 +1,4 @@
+torch==2.7.0+cpu
+torchaudio==2.7.0+cpu
+torchvision==0.22.0+cpu
+transformers==4.51.3
