@@ -5,9 +5,11 @@ import time
 import csv
 from utils import *
 
+torch.set_default_device("cpu")
+
 #TODO: Add peak memory usage during training
 def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
-                num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu'):
+                num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
 
     model.to(device)
@@ -16,7 +18,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}.csv"
+    file_name = f"rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
@@ -96,7 +98,7 @@ if __name__ == "__main__":
     lr = args.lr
     weight_decay = args.weight_decay
 
-    train_set, val_set, test_set = load_ImageNet(model_name)
+    train_set, val_set, test_set = load_dataset("../data")
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set, num_replicas=world_size, rank=rank)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, sampler=train_sampler)
