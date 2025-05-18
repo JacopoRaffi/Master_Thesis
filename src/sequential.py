@@ -50,6 +50,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
 
                 # Log the stats
                 writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, "train"])
+            file.flush()
 
             # Validation step
             model.eval()
@@ -65,21 +66,21 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                     # Log the stats
                     writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, "val"])
         
-        file.flush()
+            file.flush()
                 
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Distributed Training Script")
+    parser = argparse.ArgumentParser(description="Sequential Training Script")
     parser.add_argument("--model", type=str, required=True,
                         help="Name of the ViT model to use")
     parser.add_argument("--minibatch", type=int, default=512, 
                         help="Size of the minibatch for training")
-    parser.add_argument("--num_epochs", type=int, default=10,
+    parser.add_argument("--num_epochs", type=int, default=5,
                         help="Number of epochs to train the model")
     parser.add_argument("--lr", type=float, default=0.001,
                         help="Learning rate for the optimizer")
-    parser.add_argument("--weight_decay", type=float, default=0.0001,
+    parser.add_argument("--weight_decay", type=float, default=1e-5,
                         help="Weight decay for the optimizer")
     args = parser.parse_args()
 
@@ -102,10 +103,6 @@ if __name__ == "__main__":
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, shuffle=True, collate_fn=collate_fn)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch, collate_fn=collate_fn)
     #test_loader = torch.utils.data.DataLoader(test_set, batch_size=minibatch, collate_fn=collate_fn)
-
-    print(f"Train set size: {len(train_set)}")
-    print(f"Validation set size: {len(val_set)}")
-    print(f"Test set size: {len(test_set)}")
     
     loss = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
