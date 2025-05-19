@@ -18,53 +18,50 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
+    file_name = f"../log/rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
         writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "phase"])
 
-
-        model = DDP(model)
-
         for epoch in range(num_epochs):
             model.train()
-            for i, (images, labels) in enumerate(train_loader):
-                images = images.to(device)
-                labels = labels.to(device)
+            for i, batch in enumerate(train_loader):
+                images = batch["pixel_values"].to(device)
+                labels = batch["labels"].to(device)
 
                 optimizer.zero_grad()
                 start_forward = time.time()
-                outputs = model(**images)
-                loss = train_loss(outputs, labels)
+                outputs = model(images)
                 end_forward = time.time()
+
+                loss = train_loss(outputs.logits, labels)
 
                 start_backward = time.time()
                 loss.backward()
                 end_backward = time.time()
+                
                 optimizer.step()
 
                 # Log the stats
                 writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, "train"])
-                
+                file.flush()
 
             # Validation step
             model.eval()
             with torch.no_grad():
-                for images, labels in val_loader:
-                    images = images.to(device)
-                    labels = labels.to(device)
+                for i, batch in enumerate(val_loader):
+                    images = batch["pixel_values"].to(device)
+                    labels = batch["labels"].to(device)
                     start_forward = time.time()
-                    outputs = model(**images)
-                    loss = val_loss(outputs, labels)
+                    outputs = model(images)
                     end_forward = time.time()
 
+                    accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, loss.item(), end_forward - start_forward, 0, "val"])
-                    
-
-
-
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, "val"])
+            
+            file.flush()
 
 def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
                   num_epochs:int, asynch_iterations:int, optimizer:torch.optim, criterion:torch.nn, val_loss:callable):
@@ -75,11 +72,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Distributed Training Script")
     parser.add_argument("--mode", type=str, choices=["synch", "asynch"], default="synch", 
                         help="Training mode: 'synch' for synchronous or 'asynch' for asynchronous")
-    parser.add_argument("--model", type=str, required=True,
+    parser.add_argument("--model", type=str, default="google/vit-base-patch16-224-in21k",
                         help="Name of the ViT model to use")
-    parser.add_argument("--minibatch", type=int, default=4096, 
+    parser.add_argument("--minibatch", type=int, default=5, 
                         help="Size of the minibatch for training")
-    parser.add_argument("--num_epochs", type=int, default=10,
+    parser.add_argument("--num_epochs", type=int, default=1,
                         help="Number of epochs to train the model")
     parser.add_argument("--lr", type=float, default=0.001,
                         help="Learning rate for the optimizer")
@@ -98,19 +95,27 @@ if __name__ == "__main__":
     lr = args.lr
     weight_decay = args.weight_decay
 
+    image_processor, model = load_model(model_name, num_labels=101)
+
+    def collate_fn(batch):
+        images, labels = zip(*batch)
+        inputs = image_processor(images=list(images), return_tensors="pt")
+        inputs["labels"] = torch.tensor(labels)
+        return inputs
+
+
     train_set, val_set, test_set = load_dataset("../data")
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set, num_replicas=world_size, rank=rank)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=minibatch)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, sampler=train_sampler, collate_fn=collate_fn)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch, collate_fn=collate_fn)
+    #test_loader = torch.utils.data.DataLoader(test_set, batch_size=minibatch)
 
-    image_processor, model = load_model(model_name)
     loss = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     if mode == "synch":
-        synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss)
+        synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy)
     else:
         asynch_train()
 
