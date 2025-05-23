@@ -6,8 +6,11 @@ import psutil
 import csv
 from utils import *
 
+from transformers import logging, set_seed
+logging.set_verbosity_error()
+
 torch.set_default_device("cpu")
-torch.manual_seed(42)
+set_seed(seed=42, deterministic=False)
 
 def get_memory_usage():
     """Get the current memory usage of the process."""
@@ -20,6 +23,8 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
     
 
     model.to(device)
+
+    base_memory_usage = get_memory_usage()
 
     # csv file to save the stats
     world_size = torch.distributed.get_world_size()
@@ -56,7 +61,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward-base_memory_usage, "train"])
                 file.flush()
 
             # Validation step
@@ -74,7 +79,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
                     accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward-base_memory_usage, "val"])
             
             file.flush()
 
