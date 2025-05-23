@@ -6,8 +6,11 @@ import psutil
 import csv
 from utils import *
 
+from transformers import logging, set_seed
+logging.set_verbosity_error()
+
 torch.set_default_device("cpu")
-torch.manual_seed(42)
+set_seed(seed=42, deterministic=False)
 
 def get_memory_usage():
     """Get the current memory usage of the process."""
