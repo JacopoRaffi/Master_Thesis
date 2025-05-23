@@ -24,6 +24,8 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
     model.to(device)
 
+    base_memory_usage = get_memory_usage()
+
     # csv file to save the stats
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
@@ -59,7 +61,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward-base_memory_usage, "train"])
                 file.flush()
 
             # Validation step
@@ -77,7 +79,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
                     accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward-base_memory_usage, "val"])
             
             file.flush()
 

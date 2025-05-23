@@ -14,7 +14,6 @@ def accuracy(logits, labels):
     acc = correct / len(labels)
     return acc
 
-#TODO: Add peak memory usage during training
 def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, 
                 device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
