@@ -225,3 +225,5 @@ if __name__ == "__main__":
     else:
         asynch_train(model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy)
 
+    clean_up()
+

@@ -3,6 +3,8 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed._tensor import Shard, Replicate
+from torch.distributed.tensor import DTensor
+import torch.distributed as dist
 from torch.distributed.tensor.parallel import ColwiseParallel, RowwiseParallel, parallelize_module
 import time
 import psutil
@@ -17,26 +19,23 @@ torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
 def parallelize_vit_model(model, tp_mesh):
-    for i, block in enumerate(model.vit.encoder.layer):
+    for _, block in enumerate(model.vit.encoder.layer):
         layer_tp_plan = {
             # Attention qkv (Colwise)
-            "attention.attention.query.weight": ColwiseParallel(),
-            "attention.attention.key.weight": ColwiseParallel(),
-            "attention.attention.value.weight": ColwiseParallel(),
+            "attention.attention.query": ColwiseParallel(),
+            "attention.attention.key": ColwiseParallel(),
+            "attention.attention.value": ColwiseParallel(),
 
             # Attention output (Rowwise)
-            "attention.output.dense.weight": RowwiseParallel(),
+            "attention.output.dense": RowwiseParallel(),
 
             # Feedforward (Colwise -> Rowwise)
-            "intermediate.dense.weight": ColwiseParallel(),
-            "output.dense.weight": RowwiseParallel(),
+            "intermediate.dense": ColwiseParallel(),
+            #"output.dense": RowwiseParallel(),
         }
-
-        # Reduce number of attention heads per rank (tutorial style)
+        
         attn = block.attention.attention
-        attn.num_attention_heads = max(attn.num_attention_heads // tp_mesh.size(), 1)
-        if hasattr(attn, "num_key_value_heads"):
-            attn.num_key_value_heads = max(attn.num_key_value_heads // tp_mesh.size(), 1)
+        attn.num_attention_heads = attn.num_attention_heads // tp_mesh.size()
 
         parallelize_module(
             block,
@@ -44,11 +43,11 @@ def parallelize_vit_model(model, tp_mesh):
             layer_tp_plan,
         )
 
-    parallelize_module(
-        model.classifier,
+    model = parallelize_module(
+        model,
         tp_mesh,
         {
-            "weight": ColwiseParallel(output_layouts=Replicate()),
+            "classifier": ColwiseParallel(output_layouts=Replicate()),
         },
     )
 
@@ -74,6 +73,8 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
         for epoch in range(num_epochs):
             model.train()
             for i, batch in enumerate(train_loader):
+                if (i+1) % 5 == 0:
+                    return
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 
@@ -95,7 +96,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
 
                 # Log the stats
                 writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward, "train"])
-            file.flush()
+                file.flush()
 
             # Validation step
             model.eval()
@@ -160,8 +161,10 @@ if __name__ == "__main__":
 
     optim = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
-
     model_name = model_name.split("/")[-1] 
+
     train(model, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name)
+
+    clean_up()
     
 

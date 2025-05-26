@@ -56,3 +56,7 @@ def init_distributed():
     dist.init_process_group()
 
     return rank, world_size, device
+
+def clean_up():
+    '''Clean up the distributed process group'''
+    dist.destroy_process_group(dist.group.WORLD)
