@@ -12,12 +12,6 @@ logging.set_verbosity_error()
 torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
-def get_memory_usage():
-    """Get the current memory usage of the process."""
-    process = psutil.Process()
-    mem = process.memory_info().rss / (1024 ** 2)  # Convert bytes to MB
-    return mem
-
 def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
@@ -30,7 +24,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"../log/rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
+    file_name = f"../log/synch_ddp/rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
 
     model = DDP(model)
 
@@ -115,7 +109,7 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"../log/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}.csv"
+    file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}.csv"
     model = DDP(model)
 
     with open(file_name, mode="w+") as file:

@@ -9,13 +9,77 @@ import csv
 
 from utils import *
 
+from transformers import logging, set_seed
+logging.set_verbosity_error()
+
+torch.set_default_device("cpu")
+set_seed(seed=42, deterministic=False)
+
 #TODO: Implement the parallelization for ViT model
 def parallelize_vit_model(model, mesh):
     pass
 
 def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
-    pass
+    
+    model.to(device)
+
+    base_memory_usage = get_memory_usage()
+
+    # csv file to save the stats
+    world_size = torch.distributed.get_world_size()
+    rank = torch.distributed.get_rank()
+    batch_size = train_loader.batch_size
+    file_name = f"../log/tp/rank_{rank}_tp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
+
+    with open(file_name, mode="w+") as file:
+        writer = csv.writer(file)
+        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "peak_memory_usage(MB)", "phase"])
+
+        for epoch in range(num_epochs):
+            model.train()
+            for i, batch in enumerate(train_loader):
+                images = batch["pixel_values"].to(device)
+                labels = batch["labels"].to(device)
+
+                optimizer.zero_grad()
+                start_forward = time.time()
+                outputs = model(images)
+                end_forward = time.time()
+
+                # Get the memory usage after forward pass
+                mem_usage_forward = get_memory_usage()
+
+                loss = train_loss(outputs.logits, labels)
+
+                start_backward = time.time()
+                loss.backward()
+                end_backward = time.time()
+                
+                optimizer.step()
+
+                # Log the stats
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward, "train"])
+            file.flush()
+
+            # Validation step
+            model.eval()
+            with torch.no_grad():
+                for i, batch in enumerate(val_loader):
+                    images = batch["pixel_values"].to(device)
+                    labels = batch["labels"].to(device)
+                    start_forward = time.time()
+                    outputs = model(images)
+                    end_forward = time.time()
+
+                    # Get the memory usage after forward pass
+                    mem_usage_forward = get_memory_usage()
+
+                    accuracy = val_loss(outputs.logits, labels)
+                    # Log the stats
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+            
+            file.flush()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tensor Parallelism Example")

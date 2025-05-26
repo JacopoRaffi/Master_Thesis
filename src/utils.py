@@ -3,6 +3,13 @@ import torchvision
 import torch
 import torch.distributed as dist
 import os
+import psutil
+
+def get_memory_usage():
+    """Get the current memory usage of the process."""
+    process = psutil.Process()
+    mem = process.memory_info().rss / (1024 ** 2)  # Convert bytes to MB
+    return mem
 
 def accuracy(logits, labels):
     """Compute the accuracy of the model predictions."""
