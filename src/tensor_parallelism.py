@@ -2,6 +2,7 @@ import argparse
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.device_mesh import init_device_mesh
+from torch.distributed._tensor import Shard, Replicate
 from torch.distributed.tensor.parallel import ColwiseParallel, RowwiseParallel, parallelize_module
 import time
 import psutil
@@ -15,9 +16,43 @@ logging.set_verbosity_error()
 torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
-#TODO: Implement the parallelization for ViT model
-def parallelize_vit_model(model, mesh):
-    pass
+def parallelize_vit_model(model, tp_mesh):
+    for i, block in enumerate(model.vit.encoder.layer):
+        layer_tp_plan = {
+            # Attention qkv (Colwise)
+            "attention.attention.query.weight": ColwiseParallel(),
+            "attention.attention.key.weight": ColwiseParallel(),
+            "attention.attention.value.weight": ColwiseParallel(),
+
+            # Attention output (Rowwise)
+            "attention.output.dense.weight": RowwiseParallel(),
+
+            # Feedforward (Colwise -> Rowwise)
+            "intermediate.dense.weight": ColwiseParallel(),
+            "output.dense.weight": RowwiseParallel(),
+        }
+
+        # Reduce number of attention heads per rank (tutorial style)
+        attn = block.attention.attention
+        attn.num_attention_heads = max(attn.num_attention_heads // tp_mesh.size(), 1)
+        if hasattr(attn, "num_key_value_heads"):
+            attn.num_key_value_heads = max(attn.num_key_value_heads // tp_mesh.size(), 1)
+
+        parallelize_module(
+            block,
+            tp_mesh,
+            layer_tp_plan,
+        )
+
+    parallelize_module(
+        model.classifier,
+        tp_mesh,
+        {
+            "weight": ColwiseParallel(output_layouts=Replicate()),
+        },
+    )
+
+    return model
 
 def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
@@ -117,16 +152,16 @@ if __name__ == "__main__":
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
     mesh = init_device_mesh(device_name, (world,)) #1D Parallelism
 
-    model = parallelize_module(model, mesh)
+    model = parallelize_vit_model(model, mesh)
 
-    # train_set, val_set, _ = load_dataset("../data")
-    # train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, shuffle=True, collate_fn=collate_fn)
-    # val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch, shuffle=False, collate_fn=collate_fn)
+    train_set, val_set, _ = load_dataset("../data")
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=minibatch, shuffle=True, collate_fn=collate_fn)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=minibatch, shuffle=False, collate_fn=collate_fn)
 
-    # optim = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    # criterion = torch.nn.CrossEntropyLoss()
+    optim = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    criterion = torch.nn.CrossEntropyLoss()
 
-    # model_name = model_name.split("/")[-1] 
-    # train(model, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name)
+    model_name = model_name.split("/")[-1] 
+    train(model, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name)
     
 
