@@ -36,6 +36,7 @@ def parallelize_vit_model(model, tp_mesh):
 
         attn = block.attention.attention
         attn.num_attention_heads = attn.num_attention_heads // tp_mesh.size()
+        attn.all_head_size = attn.all_head_size // tp_mesh.size()
 
         parallelize_module(
             block,
@@ -73,8 +74,6 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
         for epoch in range(num_epochs):
             model.train()
             for i, batch in enumerate(train_loader):
-                if (i+1) % 5 == 0:
-                    return
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 
@@ -138,7 +137,6 @@ if __name__ == "__main__":
     num_epochs = args.num_epochs
     lr = args.lr
     weight_decay = args.weight_decay
-    tau = args.tau
 
     image_processor, model = load_model(model_name, num_labels=101)
 
