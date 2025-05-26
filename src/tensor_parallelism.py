@@ -33,7 +33,7 @@ def parallelize_vit_model(model, tp_mesh):
             "intermediate.dense": ColwiseParallel(),
             #"output.dense": RowwiseParallel(),
         }
-        
+
         attn = block.attention.attention
         attn.num_attention_heads = attn.num_attention_heads // tp_mesh.size()
 
@@ -118,7 +118,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
             file.flush()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Tensor Parallelism Example")
+    parser = argparse.ArgumentParser(description="Tensor Parallelism")
     parser.add_argument("--model", type=str, default="google/vit-base-patch16-224-in21k",
                         help="Name of the ViT model to use")
     parser.add_argument("--minibatch", type=int, default=512, 
@@ -129,8 +129,6 @@ if __name__ == "__main__":
                         help="Learning rate for the optimizer")
     parser.add_argument("--weight_decay", type=float, default=1e-2,
                         help="Weight decay for the optimizer")
-    parser.add_argument("--tau", type=int, default=10,
-                        help="Number of iteration to be performed before synchronizing")
     args = parser.parse_args()
 
     rank, world, device = init_distributed()
