@@ -30,7 +30,6 @@ def split_model(model, num_stages, input_sample, device="cpu"):
 
     return stage
 
-#TODO: Adapt train function to use the pipeline stage and the scheduler
 def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, n_microbatch:int,
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
@@ -143,6 +142,8 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
     model_name = model_name.split("/")[-1] 
 
-    train(stage, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name)
+    max_peak = measure_memory(train(stage, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name))
+
+    print(f"Peak memory usage: {max_peak} MiB")
 
     clean_up()

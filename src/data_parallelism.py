@@ -206,9 +206,11 @@ if __name__ == "__main__":
     model_name = model_name.split("/")[-1] 
 
     if mode == "synch":
-        synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, model_name=model_name)
+        max_peak = measure_memory(synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, model_name=model_name))
     else:
-        asynch_train(model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy)
+        max_peak = measure_memory(asynch_train(model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy))
+
+    print(f"Peak memory usage: {max_peak} MiB")
 
     clean_up()
 

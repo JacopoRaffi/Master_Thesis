@@ -3,13 +3,11 @@ import torchvision
 import torch
 import torch.distributed as dist
 import os
-import psutil
+from memory_profiler import memory_usage
 
-def get_memory_usage():
-    """Get the current memory usage of the process."""
-    process = psutil.Process()
-    mem = process.memory_info().rss / (1024 ** 2)  # Convert bytes to MB
-    return mem
+def measure_memory(func, *args, **kwargs):
+    mem_usage = memory_usage((func, args, kwargs), max_usage=True)
+    print(f"Max memory usage: {mem_usage} MiB")
 
 def accuracy(logits, labels):
     """Compute the accuracy of the model predictions."""
