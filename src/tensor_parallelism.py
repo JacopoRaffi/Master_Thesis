@@ -55,8 +55,6 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
     
     model.to(device)
 
-    base_memory_usage = get_memory_usage()
-
     # csv file to save the stats
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
@@ -65,7 +63,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
-        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "peak_memory_usage(MB)", "phase"])
+        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "phase"])
 
         for epoch in range(num_epochs):
             model.train()
@@ -78,9 +76,6 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                 outputs = model(images)
                 end_forward = time.time()
 
-                # Get the memory usage after forward pass
-                mem_usage_forward = get_memory_usage()
-
                 loss = train_loss(outputs.logits, labels)
 
                 start_backward = time.time()
@@ -90,7 +85,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, "train"])
                 file.flush()
 
             # Validation step
@@ -103,12 +98,9 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                     outputs = model(images)
                     end_forward = time.time()
 
-                    # Get the memory usage after forward pass
-                    mem_usage_forward = get_memory_usage()
-
                     accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, "val"])
             
             file.flush()
 

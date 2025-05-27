@@ -18,8 +18,6 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
     model.to(device)
 
-    base_memory_usage = get_memory_usage()
-
     # csv file to save the stats
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
@@ -30,7 +28,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
-        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "peak_memory_usage(MB)", "phase"])
+        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "phase"])
 
         for epoch in range(num_epochs):
             model.train()
@@ -43,9 +41,6 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 outputs = model(images)
                 end_forward = time.time()
 
-                # Get the memory usage after forward pass
-                mem_usage_forward = get_memory_usage()
-
                 loss = train_loss(outputs.logits, labels)
 
                 start_backward = time.time()
@@ -55,7 +50,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, "train"])
             file.flush()
 
             # Validation step
@@ -68,12 +63,9 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                     outputs = model(images)
                     end_forward = time.time()
 
-                    # Get the memory usage after forward pass
-                    mem_usage_forward = get_memory_usage()
-
                     accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, "val"])
             
             file.flush()
 
@@ -105,7 +97,6 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
                   num_epochs:int, tau:int, optimizer:torch.optim, criterion:torch.nn, val_loss:callable):
     
     model.to(device)
-    base_memory_usage = get_memory_usage()
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
@@ -114,7 +105,7 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
-        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "synch_avg_time", "peak_memory_usage(MB)", "phase"])
+        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "synch_avg_time", "phase"])
 
         for epoch in range(num_epochs):
             model.train()
@@ -126,9 +117,6 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
                 start_forward = time.time()
                 outputs = model(images)
                 end_forward = time.time()
-
-                # Get the memory usage after forward pass
-                mem_usage_forward = get_memory_usage()
 
                 loss = criterion(outputs.logits, labels)
 
@@ -148,7 +136,7 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
                     avg_time = end_sync - start_sync
                 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, avg_time, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, avg_time, "train"])
                 file.flush()
 
             # Validation step
@@ -161,12 +149,9 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
                     outputs = model(images)
                     end_forward = time.time()
 
-                    # Get the memory usage after forward pass
-                    mem_usage_forward = get_memory_usage()
-
                     accuracy = val_loss(outputs.logits, labels)
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, 0, "val"])
             
             file.flush()
 

@@ -31,13 +31,11 @@ def split_model(model, num_stages, input_sample, device="cpu"):
     return stage
 
 #TODO: Adapt train function to use the pipeline stage and the scheduler
-def train(stage:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, n_microbatch:int,
+def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, n_microbatch:int,
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
     train_schedule = Schedule1F1B(stage, n_microbatches=n_microbatch, loss_fn=train_loss)
     val_schedule = Schedule1F1B(stage, n_microbatches=n_microbatch)
-
-    base_memory_usage = get_memory_usage()
 
     # csv file to save the stats
     world_size = torch.distributed.get_world_size()
@@ -45,9 +43,11 @@ def train(stage:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
     batch_size = train_loader.batch_size
     file_name = f"../log/pp/rank_{rank}_pp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
 
+    stage_index = stage.stage_index
+
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
-        writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "peak_memory_usage(MB)", "phase"])
+        writer.writerow(["epoch", "batch_id", "loss", "minibatch_time", "phase"])
 
         for epoch in range(num_epochs):
             stage.submodule.train()  # Set the stage to training mode
@@ -56,23 +56,24 @@ def train(stage:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                 labels = batch["labels"].to(device)
 
                 optimizer.zero_grad()
-                start_forward = time.time()
-                outputs = model(images)
-                end_forward = time.time()
+                start_time = time.time()
 
-                # Get the memory usage after forward pass
-                mem_usage_forward = get_memory_usage()
+                if stage_index == 0: # First stage
+                    train_schedule.step(images)
+                    loss = 0
+                elif stage_index == (dist.get_world_size() - 1): # Last stage
+                    output = train_schedule.step(labels)
+                    loss = train_loss(output.logits, labels).item()
+                else: # Intermediate stages
+                    train_schedule.step()
+                    loss = 0
 
-                loss = train_loss(outputs.logits, labels)
-
-                start_backward = time.time()
-                loss.backward()
-                end_backward = time.time()
+                end_time = time.time()
                 
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, mem_usage_forward, "train"])
+                writer.writerow([epoch, i, loss.item(), end_time-start_time, "train"])
                 file.flush()
 
             # Validation step
@@ -81,16 +82,22 @@ def train(stage:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
                 for i, batch in enumerate(val_loader):
                     images = batch["pixel_values"].to(device)
                     labels = batch["labels"].to(device)
-                    start_forward = time.time()
-                    outputs = model(images)
-                    end_forward = time.time()
+                    start_time = time.time()
 
-                    # Get the memory usage after forward pass
-                    mem_usage_forward = get_memory_usage()
+                    if stage_index == 0: # First stage
+                        train_schedule.step(images)
+                        loss = 0
+                    elif stage_index == (dist.get_world_size() - 1): # Last stage
+                        output = train_schedule.step()
+                        loss = val_loss(output.logits, labels).item()
+                    else: # Intermediate stages
+                        train_schedule.step()
+                        loss = 0
 
-                    accuracy = val_loss(outputs.logits, labels)
+                    end_time = time.time()
+
                     # Log the stats
-                    writer.writerow([epoch, i, accuracy, end_forward - start_forward, 0, mem_usage_forward, "val"])
+                    writer.writerow([epoch, i, loss, end_time - start_time, "val"])
             
             file.flush()
 
