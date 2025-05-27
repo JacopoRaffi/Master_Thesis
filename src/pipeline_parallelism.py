@@ -142,8 +142,6 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
     model_name = model_name.split("/")[-1] 
 
-    max_peak = measure_memory(train(stage, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device=device, model_name=model_name))
-
-    print(f"Peak memory usage: {max_peak} MiB")
+    measure_memory(train, stage, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device, model_name)
 
     clean_up()

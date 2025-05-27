@@ -94,13 +94,13 @@ def average_weights(model: torch.nn.Module, world_size: int):
             offset += numel
 
 def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader,
-                  num_epochs:int, tau:int, optimizer:torch.optim, criterion:torch.nn, val_loss:callable):
+                  num_epochs:int, tau:int, optimizer:torch.optim, criterion:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
     model.to(device)
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}.csv"
+    file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
     model = DDP(model)
 
     with open(file_name, mode="w+") as file:
@@ -206,11 +206,9 @@ if __name__ == "__main__":
     model_name = model_name.split("/")[-1] 
 
     if mode == "synch":
-        max_peak = measure_memory(synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, model_name=model_name))
+        measure_memory(synch_train, model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, device, model_name)
     else:
-        max_peak = measure_memory(asynch_train(model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy))
-
-    print(f"Peak memory usage: {max_peak} MiB")
+        measure_memory(asynch_train, model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy, device, model_name)
 
     clean_up()
 
