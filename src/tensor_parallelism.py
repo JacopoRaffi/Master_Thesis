@@ -1,13 +1,9 @@
 import argparse
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.device_mesh import init_device_mesh
-from torch.distributed._tensor import Shard, Replicate
-from torch.distributed.tensor import DTensor
-import torch.distributed as dist
+from torch.distributed._tensor import Replicate
 from torch.distributed.tensor.parallel import ColwiseParallel, RowwiseParallel, parallelize_module
 import time
-import psutil
 import csv
 
 from utils import *
