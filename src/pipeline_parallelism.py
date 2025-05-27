@@ -32,7 +32,7 @@ def split_model(model, num_stages, input_sample, device="cpu"):
 
 def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, n_microbatch:int,
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
-    
+
     train_schedule = Schedule1F1B(stage, n_microbatches=n_microbatch, loss_fn=train_loss)
     val_schedule = Schedule1F1B(stage, n_microbatches=n_microbatch)
 
@@ -49,7 +49,7 @@ def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.util
         writer.writerow(["epoch", "batch_id", "loss", "minibatch_time", "phase"])
 
         for epoch in range(num_epochs):
-            stage.submodule.train()  # Set the stage to training mode
+            stage.submod.train()  # Set the stage to training mode
             for i, batch in enumerate(train_loader):
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
@@ -61,8 +61,8 @@ def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.util
                     train_schedule.step(images)
                     loss = 0
                 elif stage_index == (dist.get_world_size() - 1): # Last stage
-                    output = train_schedule.step(labels)
-                    loss = train_loss(output.logits, labels).item()
+                    output = train_schedule.step(target=labels)
+                    loss = train_loss(output, labels).item()
                 else: # Intermediate stages
                     train_schedule.step()
                     loss = 0
@@ -72,11 +72,11 @@ def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.util
                 optimizer.step()
 
                 # Log the stats
-                writer.writerow([epoch, i, loss.item(), end_time-start_time, "train"])
+                writer.writerow([epoch, i, loss, end_time-start_time, "train"])
                 file.flush()
 
             # Validation step
-            stage.submodule.eval()  # Set the stage to evaluation mode
+            stage.submod.eval()  # Set the stage to evaluation mode
             with torch.no_grad():
                 for i, batch in enumerate(val_loader):
                     images = batch["pixel_values"].to(device)
@@ -84,13 +84,13 @@ def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.util
                     start_time = time.time()
 
                     if stage_index == 0: # First stage
-                        train_schedule.step(images)
+                        val_schedule.step(images)
                         loss = 0
                     elif stage_index == (dist.get_world_size() - 1): # Last stage
-                        output = train_schedule.step()
+                        output = val_schedule.step()
                         loss = val_loss(output.logits, labels).item()
                     else: # Intermediate stages
-                        train_schedule.step()
+                        val_schedule.step()
                         loss = 0
 
                     end_time = time.time()
@@ -112,7 +112,7 @@ if __name__ == "__main__":
                         help="Learning rate for the optimizer")
     parser.add_argument("--weight_decay", type=float, default=1e-2,
                         help="Weight decay for the optimizer")
-    parser.add_argument("--microbatch", type=int, default=5, 
+    parser.add_argument("--microbatch", type=int, default=8, 
                         help="Size of the microbatch for pipeline parallelism")
     args = parser.parse_args()
 
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     microbatch = args.microbatch
 
     image_processor, model = load_model("google/vit-base-patch16-224-in21k", 101)
-    stage = split_model(model, num_stages=4, input_sample=torch.randn(1, 3, 224, 224))
+    stage = split_model(model, num_stages=dist.get_world_size(), input_sample=torch.randn(minibatch//microbatch, 3, 224, 224))
 
     def collate_fn(batch):
         images, labels = zip(*batch)
@@ -142,6 +142,6 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
     model_name = model_name.split("/")[-1] 
 
-    measure_memory(train, stage, train_loader, val_loader, num_epochs, optim, criterion, accuracy, device, model_name)
+    measure_memory(train, stage, train_loader, val_loader, microbatch, num_epochs, optim, criterion, accuracy, device, model_name)
 
     clean_up()
