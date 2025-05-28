@@ -76,7 +76,4 @@ def plot_memory_usage(memory_data, title, to_gb=True):
     ax.set_xticklabels([str(mb) for mb in minibatches])
     ax.legend()
 
-    # Use scientific notation for y-axis
-    ax.ticklabel_format(axis='y', style='sci', scilimits=(3,3))
-
     plt.tight_layout()
