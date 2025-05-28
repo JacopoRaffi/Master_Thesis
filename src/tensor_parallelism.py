@@ -68,10 +68,6 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
         for epoch in range(num_epochs):
             model.train()
             for i, batch in enumerate(train_loader):
-
-                if (i+1) == 2:
-                    return
-
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 

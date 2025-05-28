@@ -56,16 +56,19 @@ def train(stage, train_loader:torch.utils.data.DataLoader, val_loader:torch.util
 
                 optimizer.zero_grad()
                 start_time = time.time()
-
-                if stage_index == 0: # First stage
-                    train_schedule.step(images)
-                    loss = 0
-                elif stage_index == (dist.get_world_size() - 1): # Last stage
-                    output = train_schedule.step(target=labels)
+                if dist.get_world_size() > 1:
+                    if stage_index == 0: # First stage
+                        train_schedule.step(images)
+                        loss = 0
+                    elif stage_index == (dist.get_world_size() - 1): # Last stage
+                        output = train_schedule.step(target=labels)
+                        loss = train_loss(output, labels).item()
+                    else: # Intermediate stages
+                        train_schedule.step()
+                        loss = 0
+                else:
+                    output = train_schedule.step(images, target=labels)
                     loss = train_loss(output, labels).item()
-                else: # Intermediate stages
-                    train_schedule.step()
-                    loss = 0
 
                 end_time = time.time()
                 
