@@ -1,5 +1,6 @@
 from transformers import ViTImageProcessor, ViTModel, AutoImageProcessor, ViTForImageClassification
 import torchvision
+import socket
 import torch
 import torch.distributed as dist
 import os
@@ -48,10 +49,10 @@ def load_model(model_name:str, num_labels:int):
 
 def init_distributed():
     '''Initialize the distributed process group for distributed training'''
-    rank = int(os.environ["RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
+    dist.init_process_group(backend="mpi")
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
     device = torch.device(f"cuda:{rank % torch.cuda.device_count()}") if torch.cuda.is_available() else "cpu"
-    dist.init_process_group()
 
     return rank, world_size, device
 

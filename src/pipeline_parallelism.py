@@ -13,6 +13,8 @@ logging.set_verbosity_error()
 torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
+torch.set_num_threads(28)
+
 def split_model(model, num_stages, input_sample, device="cpu"):
     num_block = len(model.vit.encoder.layer)
     blocks_per_stage = num_block // num_stages

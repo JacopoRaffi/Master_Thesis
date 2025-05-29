@@ -12,6 +12,9 @@ logging.set_verbosity_error()
 torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
+torch.set_num_threads(28)
+torch.set_num_interop_threads(28)
+
 def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:torch.utils.data.DataLoader, 
                 num_epochs:int, optimizer:torch.optim, train_loss:torch.nn, val_loss:callable, device:str='cpu', model_name:str='vit-base-patch16-224-in21k'):
     
@@ -36,6 +39,8 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 
+                print(len(images), len(labels), epoch, i)
+
                 optimizer.zero_grad()
                 start_forward = time.time()
                 outputs = model(images)
@@ -51,7 +56,7 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
 
                 # Log the stats
                 writer.writerow([epoch, i, loss.item(), end_forward-start_forward, end_backward-start_backward, "train"])
-            file.flush()
+                file.flush()
 
             # Validation step
             model.eval()
