@@ -1,5 +1,4 @@
 data/*
 log/*
-*.sh
 *__pycache__*
 *.out

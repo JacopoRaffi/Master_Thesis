@@ -15,6 +15,7 @@ torch.set_default_device("cpu")
 set_seed(seed=42, deterministic=False)
 
 torch.set_num_threads(28)
+torch.set_num_interop_threads(28)
 
 def parallelize_vit_model(model, tp_mesh):
     for _, block in enumerate(model.vit.encoder.layer):
