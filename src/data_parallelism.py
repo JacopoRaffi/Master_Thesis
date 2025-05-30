@@ -25,7 +25,8 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"../log/synch_ddp/rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
+    iface = os.environ.get('IFACE')
+    file_name = f"../log/synch_ddp/rank_{rank}_synch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model_{iface}.csv"
 
     model = DDP(model)
 
@@ -175,6 +176,8 @@ if __name__ == "__main__":
                         help="Weight decay for the optimizer")
     parser.add_argument("--tau", type=int, default=10,
                         help="Number of iteration to be performed before synchronizing")
+    parser.add_argument("--interface", type=str, default="eth1",
+                        help="Network interface to use for distributed training")
     args = parser.parse_args()
     
     rank, world_size, device = init_distributed()
@@ -186,6 +189,7 @@ if __name__ == "__main__":
     lr = args.lr
     weight_decay = args.weight_decay
     tau = args.tau
+    interface = args.interface
 
     image_processor, model = load_model(model_name, num_labels=101)
 
@@ -209,7 +213,7 @@ if __name__ == "__main__":
     model_name = model_name.split("/")[-1] 
 
     if mode == "synch":
-        measure_memory(synch_train, model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, device, model_name)
+        synch_train(model, train_loader, val_loader, num_epochs, optimizer, loss, accuracy, device, model_name)
     else:
         measure_memory(asynch_train, model, train_loader, val_loader, num_epochs, tau, optimizer, loss, accuracy, device, model_name)
 
