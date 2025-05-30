@@ -12,8 +12,11 @@ read_bytes() {
 }
 
 export IFACE
-export LD_LIBRARY_PATH=$HOME/libomp:$LD_LIBRARY_PATH
-
+export LD_PRELOAD=/opt/intel/oneapi/compiler/2023.2.1/linux/compiler/lib/intel64_lin/libiomp5.so:$LD_PRELOAD
+export KMP_AFFINITY=granularity=fine,compact,1,0
+export KMP_BLOCKTIME=1
+export LD_PRELOAD=<jemalloc.so/tcmalloc.so>:$LD_PRELOAD
+ln -s /opt/intel/oneapi/compiler/2023.2.1/linux/compiler/lib/intel64_lin/libiomp5.so ./libomp.so
 echo "$@"
 echo "=== Prima del training ==="
 srun bash -c 'read_bytes() { RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes); TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes); echo "$(hostname) $RX $TX"; }; read_bytes'
