@@ -7,6 +7,9 @@ from utils import *
 
 torch.set_default_device("cpu")
 
+torch.set_num_threads(28)
+torch.set_num_interop_threads(28)
+
 def accuracy(logits, labels):
     """Compute the accuracy of the model predictions."""
     _, preds = torch.max(logits, 1)
@@ -22,7 +25,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
     model.to(device)
     # csv file to save the stats
     batch_size = train_loader.batch_size
-    file_name = f"../log/seq_minibatch_{batch_size}_model_{model_name}.csv"
+    file_name = f"../log/seq_minibatch_{batch_size}_model_{model_name}_1.csv"
 
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
@@ -49,7 +52,7 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
 
                 # Log the stats
                 writer.writerow([epoch, i, loss.item(), end_forward - start_forward, end_backward - start_backward, "train"])
-            file.flush()
+                file.flush()
 
             # Validation step
             model.eval()
@@ -71,9 +74,9 @@ def train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_loader:t
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sequential Training Script")
-    parser.add_argument("--model", type=str, required=True,
+    parser.add_argument("--model", type=str, default="google/vit-base-patch16-224-in21k",
                         help="Name of the ViT model to use")
-    parser.add_argument("--minibatch", type=int, default=512, 
+    parser.add_argument("--minibatch", type=int, default=256, 
                         help="Size of the minibatch for training")
     parser.add_argument("--num_epochs", type=int, default=5,
                         help="Number of epochs to train the model")

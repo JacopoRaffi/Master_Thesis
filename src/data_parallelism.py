@@ -39,8 +39,6 @@ def synch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_lo
                 images = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
 
-                print(len(images), len(labels), epoch, i)
-
                 optimizer.zero_grad()
                 start_forward = time.time()
                 outputs = model(images)
