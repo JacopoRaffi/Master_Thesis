@@ -7,13 +7,13 @@ def plot_speedup(df_list, title, label, color="blue", linestyle="-", plot_ideal=
         df["minibatch_time"] = df["forward_time"] + df["backward_time"]
 
     # Base time from the single-worker (1 GPU) run
-    base_time = df_list[0]["minibatch_time"].sum()
+    base_time = df_list[0]["minibatch_time"].mean()
 
     # Degree of parallelism: 1, 2, 4, 8, ...
     x_values = [2**i for i in range(len(df_list))]
 
     # Speedup = T(1) / T(n)
-    speedups = [base_time / df["minibatch_time"].sum() for df in df_list]
+    speedups = [base_time / df["minibatch_time"].mean() for df in df_list]
 
     # Plot measured speedup
     plt.plot(x_values, speedups, marker='o', label=label, color=color, linestyle=linestyle)
