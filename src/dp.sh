@@ -1,8 +1,28 @@
 #!/bin/bash
 #SBATCH --ntasks-per-node=1
 #SBATCH --output=log_%j.out
+#SBATCH --error=log_%j.err
 
 IFACE="eth1"
+PROVIDER="tcp"
+
+for ARG in "$@"; do
+  case "$ARG" in
+    -interface=*|--interface=*)
+      IFACE="${ARG#*=}"
+      ;;
+  esac
+done
+
+# Determine provider based on interface
+if [[ "$IFACE" == "ib0" ]]; then
+  PROVIDER="psm2"
+elif [[ "$IFACE" == "eth1" ]]; then
+  PROVIDER="tcp"
+else
+  echo "Unsupported interface: $IFACE"
+  exit 1
+fi
 
 read_bytes() {
     RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes)
@@ -11,17 +31,20 @@ read_bytes() {
 }
 
 export IFACE
+export I_MPI_OFI_PROVIDER=$PROVIDER
+
 export LD_PRELOAD=/opt/intel/oneapi/compiler/2023.2.1/linux/compiler/lib/intel64_lin/libiomp5.so:$LD_PRELOAD
 export KMP_AFFINITY=granularity=fine,compact,1,0
 export KMP_BLOCKTIME=1
-export LD_PRELOAD=<jemalloc.so/tcmalloc.so>:$LD_PRELOAD
-ln -s /opt/intel/oneapi/compiler/2023.2.1/linux/compiler/lib/intel64_lin/libiomp5.so ./libomp.so
+[ -e ./libomp.so ] || ln -s /opt/intel/oneapi/compiler/2023.2.1/linux/compiler/lib/intel64_lin/libiomp5.so ./libomp.so
 echo "$@"
 echo "=== Prima del training ==="
 srun bash -c 'read_bytes() { RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes); TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes); echo "$(hostname) $RX $TX"; }; read_bytes'
 
-MASTER_ADDR=$(scontrol show hostnames $SLURM_NODELIST | head -n 1)
-MASTER_PORT=29500
+
+
+# MASTER_ADDR=$(scontrol show hostnames $SLURM_NODELIST | head -n 1)
+# MASTER_PORT=29500
 
 # srun torchrun \
 #     --nnodes=$SLURM_NNODES \
@@ -30,7 +53,7 @@ MASTER_PORT=29500
 #     --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 #     data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
 
-mpirun python data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
+mpirun --iface $IFACE python data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
 
 echo "=== Dopo il training ==="
 srun bash -c 'read_bytes() { RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes); TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes); echo "$(hostname) $RX $TX"; }; read_bytes'
