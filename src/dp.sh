@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --ntasks-per-node=1
-#SBATCH --output=log_%j.out
-#SBATCH --error=log_%j.err
+#SBATCH --output=../jobs_log/log_%x.out
+#SBATCH --error=../jobs_log/log_%x.err
 
 IFACE="eth1"
 PROVIDER="tcp"
@@ -53,7 +53,9 @@ srun bash -c 'read_bytes() { RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes)
 #     --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 #     data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
 
-mpirun --iface $IFACE python data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
+export I_MPI_DEBUG=5
+
+mpirun -iface $IFACE python data_parallelism.py "$@" #--minibatch 256 --model "google/vit-base-patch16-224-in21k" \
 
 echo "=== Dopo il training ==="
 srun bash -c 'read_bytes() { RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes); TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes); echo "$(hostname) $RX $TX"; }; read_bytes'

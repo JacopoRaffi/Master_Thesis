@@ -8,10 +8,10 @@ IGNORE_USERS="root|slurm|sshd|nobody"
 
 for NODE in $NODES; do
     echo -n "$NODE: "
-    
-    ssh "$NODE" "
+
+    srun --nodes=1 --nodelist="$NODE" --ntasks=1 --exclusive bash -c "
         ps -eo user= | grep -vE '$IGNORE_USERS' | sort | uniq
     " | tr '\n' ' '
-    
+
     echo
 done
