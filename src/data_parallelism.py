@@ -108,6 +108,8 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
     file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}_tau_{tau}_{model_name}_model_{iface}.csv"
     model = DDP(model)
 
+    iteration = 0
+
     with open(file_name, mode="w+") as file:
         writer = csv.writer(file)
         writer.writerow(["epoch", "batch_id", "loss", "forward_time", "backward_time", "synch_avg_time", "phase"])
@@ -132,8 +134,9 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
                 optimizer.step()
 
                 avg_time = 0
+                iteration += 1
 
-                if (i + 1) % tau == 0:
+                if (iteration + 1) % tau == 0:
                     # Synchronize the model weights
                     start_sync = time.time()
                     average_weights(model, world_size)
