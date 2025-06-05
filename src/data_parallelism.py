@@ -106,7 +106,6 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
     batch_size = train_loader.batch_size * world_size
     iface = os.environ.get('IFACE')
     file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}_tau_{tau}_{model_name}_model_{iface}.csv"
-    model = DDP(model)
 
     iteration = 0
 
