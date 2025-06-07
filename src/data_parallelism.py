@@ -104,8 +104,8 @@ def asynch_train(model:torch.nn, train_loader:torch.utils.data.DataLoader, val_l
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     batch_size = train_loader.batch_size * world_size
-    file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}_{model_name}_model.csv"
-    model = DDP(model)
+    iface = os.environ.get('IFACE')
+    file_name = f"../log/asynch_ddp/rank_{rank}_asynch_ddp_{world_size}_minibatch_{batch_size}_tau_{tau}_{model_name}_model_{iface}.csv"
 
     iteration = 0
 
