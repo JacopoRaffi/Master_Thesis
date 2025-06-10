@@ -21,11 +21,11 @@ def plot_speedup(df_list, title, label, color="blue", linestyle="-", plot_ideal=
     # Plot ideal linear speedup
     if plot_ideal:
         ideal_speedup = x_values  # i.e., S(n) = n
-        plt.plot(x_values, ideal_speedup, linestyle='--', color='gray', label="Ideal Speedup")
+        plt.plot(x_values, ideal_speedup, linestyle='--', color='gray', label="Ideal Scalability")
     
     plt.xticks(x_values, [f"{ddp}" for ddp in x_values])
     plt.xlabel("Degree of Parallelism")
-    plt.ylabel("Speedup")
+    plt.ylabel("Scalability")
     plt.title(title)
     plt.legend()
     plt.grid(True)
