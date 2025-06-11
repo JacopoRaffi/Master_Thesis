@@ -1,10 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_speedup(df_list, title, label, color="blue", linestyle="-", plot_ideal=True):
+def plot_speedup(df_list, title, label, color="blue", linestyle="-", plot_ideal=True, asynch=False):
     # Compute minibatch time for all DataFrames
-    for df in df_list:
-        df["minibatch_time"] = df["forward_time"] + df["backward_time"]
+    if asynch:
+        for df in df_list:
+            df["minibatch_time"] = df["forward_time"] + df["backward_time"] + df["synch_avg_time"]
+    else:
+        for df in df_list:
+            df["minibatch_time"] = df["forward_time"] + df["backward_time"]
 
     # Base time from the single-worker (1 GPU) run
     base_time = df_list[0]["minibatch_time"].mean()
